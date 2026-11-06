@@ -1,0 +1,54 @@
+﻿<!doctype html>
+<meta charset="utf-8">
+<body style="margin:12px;background:#111;color:#eee;font:22px monospace">
+<div id="out" style="white-space:pre">đang tải...</div>
+<div style="font-size:16px;color:#9ab;margin-top:16px">SỰ KIỆN GẦN ĐÂY</div>
+<div id="feed" style="font-size:16px;white-space:pre">đang tải...</div>
+<script>
+async function tick() {
+  try {
+    const d = await (await fetch("https://api.squeekchain.com/v1/status")).json();
+    const m = d.measurement;
+    if (!m) { out.textContent = "chưa có dữ liệu"; return; }
+    const kmh = (m.speedMmPerSecond * 0.0036).toFixed(2);
+    const km = (Number(m.distanceMm) / 1e6).toFixed(2);
+    const block = d.builder.status === "available" ? d.builder.projected.blockHeight : "?";
+    out.textContent =
+      (m.freshness === "online" ? "🐹 " + m.coreStatus : "💤 offline") +
+      `\nTốc độ: ${kmh} km/h\nHôm nay: ${km} km\nBlock (dự kiến): ${block}`;
+  } catch (e) { out.textContent = "lỗi: " + e.message; }
+}
+
+function describe(e) {
+  const p = e.payload;
+  switch (e.type) {
+    case "measurement.distance_milestone":
+      return `Tổng quãng đường đạt ${Number(p.thresholdDistanceMm) / 1e6} km`;
+    case "measurement.daily_distance_milestone":
+      return `Hôm nay đã chạy ${Number(p.thresholdDistanceMm) / 1e6} km`;
+    case "measurement.speed_milestone":
+      return `Đạt tốc độ ${Math.round(Number(p.thresholdSpeedMmPerSecond) * 0.0036)} km/h`;
+    case "measurement.speed_record":
+      return `Kỷ lục tốc độ mới: ${(Number(p.recordMmPerSecond) * 0.0036).toFixed(2)} km/h`;
+    case "measurement.distance_streak":
+      return `Chuỗi ${p.days} ngày chạy từ 5 km trở lên`;
+    default:
+      return e.type;
+  }
+}
+
+async function loadFeed() {
+  const el = document.getElementById("feed");
+  try {
+    const d = await (await fetch("https://api.squeekchain.com/v1/events?category=measurement&limit=5")).json();
+    if (d.status !== "available") { el.textContent = "chưa rõ (" + d.reason + ")"; return; }
+    el.textContent = d.events
+      .map(e => new Date(e.occurredAt).toLocaleString("vi-VN") + "  " + describe(e))
+      .join("\n") || "chưa có sự kiện";
+  } catch (err) { el.textContent = "lỗi: " + err.message; }
+}
+
+tick(); loadFeed();
+setInterval(tick, 2000);
+setInterval(loadFeed, 10000);
+</script>
